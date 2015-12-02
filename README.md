@@ -14,3 +14,7 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
 
 3. Image类只提供.o文件，编译方式见Makefile
 
+
+
+> 我的CSDN博客：http://blog.csdn.net/litdaguang
+
