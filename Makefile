@@ -1,4 +1,4 @@
-ALGNAMES := Mosaic 
+ALGNAMES := Mosaic Binarize
 			
 INCFILES := ErrorCode.h $(addsuffix .h, $(ALGNAMES))
 OBJFILES := main.o $(addsuffix .o, $(ALGNAMES))
