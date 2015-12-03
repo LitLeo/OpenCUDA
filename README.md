@@ -9,9 +9,13 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
 2015-12.01 更新 版本v0.1
 
 1. 初始版本，添加马赛克（Mosaic）算法，内有详细注释；
-
 2. 目前支持的平台为linux；
+3. Image类只提供.o文件，编译方式见Makefile
 
+2015-12.03 更新 版本v0.2
+
+1. 版本v0.2，添加二值化（Binarize）算法，内有详细注释；
+2. 目前支持的平台为linux；
 3. Image类只提供.o文件，编译方式见Makefile
 
 
