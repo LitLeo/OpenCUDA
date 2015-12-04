@@ -18,6 +18,15 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
 2. 目前支持的平台为linux；
 3. Image类只提供.o文件，编译方式见Makefile
 
+2015-12.04 更新 版本v0.3
+
+1. 版本v0.3，添加并行排序（SortArray）,内有详细注释
+功能说明：实现并行排序算法，包括：双调排序，Batcher's 奇偶合并排序，
+          以及 shear 排序。其中，双调排序和 Batcher's 奇偶合并排序
+          的数组长度不能超过一个块内的 shared 内存最大限制（一般为 1024）。
+          当数组个数大于 1024 时，可以调用 shear 排序，其最大限制为 
+          1024×1024 的矩阵。
+
 
 
 > 我的CSDN博客：http://blog.csdn.net/litdaguang
