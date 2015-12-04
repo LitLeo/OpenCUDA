@@ -27,7 +27,7 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
           当数组个数大于 1024 时，可以调用 shear 排序，其最大限制为 
           1024×1024 的矩阵。
 
-
+The Tesla K40 used for this research was donated by the NVIDIA Corporation.
 
 > 我的CSDN博客：http://blog.csdn.net/litdaguang
 
