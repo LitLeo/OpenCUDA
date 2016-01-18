@@ -29,9 +29,11 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
 
 2015-12.04 更新 版本v1.0
 1. 提供Image类源码
-2.  
+2. 新增一些算法 
 
 The Tesla K40 used for this research was donated by the NVIDIA Corporation.
 
 > 我的CSDN博客：http://blog.csdn.net/litdaguang
+
+
 
