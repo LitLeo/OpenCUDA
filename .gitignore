@@ -25,6 +25,8 @@
 *.exe
 *.out
 *.app
+*.py
+*.txt
 
 /okano_3_0
 

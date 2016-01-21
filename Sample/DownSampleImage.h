@@ -1,5 +1,4 @@
 ﻿// DownSampleImage.h
-// 创建人：李冬
 //
 // 缩小图像（DownSampleImage）
 // 功能说明：根据给定的缩小倍数 N，将输入图像缩小，将其尺寸从  
