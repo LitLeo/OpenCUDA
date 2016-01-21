@@ -61,12 +61,9 @@ CUDA(Compute Unified Device Architecture)，是显卡厂商NVIDIA推出的运算
 
 The Tesla K40 used for this research was donated by the NVIDIA Corporation.
 
-> 我的CSDN博客：http://blog.csdn.net/litdaguang
+----------
 
+我的CSDN博客：http://blog.csdn.net/litdaguang
 
-
-
-
-
-
-
+私人接各种CUDA相关外包（调试、优化、开发图像算法等），有意向请联系，加好友时请注明。
+![这里写图片描述](http://img.blog.csdn.net/20160105151916651)
