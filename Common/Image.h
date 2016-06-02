@@ -1,7 +1,38 @@
 // Image.h
+// 创建人：于玉龙
 //
 // 图像定义（Image）
 // 功能说明：定义了图像的数据结构和对图像的基本操作。
+//
+// 修订历史：
+// 2012年07月14日（于玉龙）
+//     初始版本。
+// 2012年07月22日（于玉龙）
+//     增加了 make 函数族，包括了 makeAtCurrentDevice 和 makeAtHost 两个函数。
+//     修正了一些注释中的错误和错别字。
+// 2012年07月23日（于玉龙）
+//     优化了部分代码的表现形式。
+// 2012年07月24日（于玉龙）
+//     优化了 In-place 版本的 copyToCurrerntDevice 和 copyToHost 函数的代码。
+// 2012年07月25日（于玉龙）
+//     优化了 Out-place 版本的 copyToCurrerntDevice 和 copyToHost 函数的代码。
+// 2012年08月18日（于玉龙）
+//     增加了根据 ROI 提取子图像的方法，该方法用于 Kernel 函数的封装函数中，方
+//     便代码的编写工作。
+// 2012年08月20日（于玉龙）
+//     补充了提取 ROI 子图像的注意事项的注释说明。
+// 2012年09月08日（于玉龙）
+//     优化了 copyToCurrerntDevice 和 copyToHost 函数的健壮性。
+// 2012年11月10日（杨晓光、于玉龙）
+//     修正了图像读取和存储方法中一个潜在的错误。修改了一处代码格式错误。
+// 2012年11月19日（于玉龙）
+//     修改了一处由于代码格式导致的潜在错误。
+// 2012年11月20日（于玉龙）
+//     修改了代码中内存分配过程中存在的潜在错误。
+// 2012年11月22日（于玉龙）
+//     修正了代码中关于内存拷贝的一处潜在错误。
+// 2012年11月23日（于玉龙）
+//     修改了文件保存中的一处潜在的错误。
 
 #ifndef __IMAGE_H__
 #define __IMAGE_H__
@@ -31,14 +62,12 @@ typedef struct Image_st {
 // 该结构体定义了与 CUDA 相关的图像数据。该结构体通常在算法内部使用，上层用户通
 // 常见不到也不需要了解此结构体。
 typedef struct ImageCuda_st {
-    Image imgMeta;             // 图像数据，保存了对应的图像逻辑数据。
-    int deviceId;              // 当前数据所处的内存，若数据在 GPU 的内存上，则
-                               // deviceId 为对应设备的编号；若 deviceId < 0，
-                               // 则说明数据存储在 Host 内存上。
-    unsigned char *mapSource;  // 内存映射源指针，如果指针不为空，则说明已经
-                               // 使用了内内存映射。
-    size_t pitchBytes;         // Padding 后图像每行数据所占内存的字节数，要求 
-                               // pitchBytes >= width * sizeof (unsigned char)
+    Image imgMeta;     // 图像数据，保存了对应的图像逻辑数据。
+    int deviceId;      // 当前数据所处的内存，如果数据在 GPU 的内存上，则
+                       // deviceId 为对应设备的编号；若 deviceId < 0，则说明数
+                       // 据存储在 Host 内存上。
+    size_t pitchBytes; // Padding 后图像每行数据所占内存的字节数，要求 
+                       // pitchBytes >= width * sizeof (unsigned char)
 } ImageCuda;
 
 // 宏：IMAGE_CUDA
@@ -67,7 +96,7 @@ public:
     newImage(
             Image **outimg  // 返回的新创建的图像的指针。
     );
-    
+
     // Host 静态方法：deleteImage（销毁图像）
     // 销毁一个不再被使用的图像实例。
     static __host__ int   // 返回值：函数是否正确执行，若函数正确执行，返回
@@ -140,7 +169,7 @@ public:
     copyToCurrentDevice(
             Image *img   // 需要将数据拷贝到当前 Device 的图像。
     );
-    
+
     // Host 静态方法：copyToCurrentDevice（将图像拷贝到当前 Device 内存上）
     // 这是一个 Out-Place 形式的拷贝。无论 srcimg 位于哪一个内存空间中，都会得
     // 到一个和其内容完全一致的 dstimg，且数据是存储于当前的 Device 上的。如果
@@ -157,8 +186,7 @@ public:
     // Host 静态方法：copyToHost（将图像拷贝到 Host 内存上）
     // 这是一个 In-Place 形式的拷贝。如果图像数据本来就在 Host 上，则该函数不会
     // 进行任何操作，直接返回。如果图像数据不在 Host 上，则会将数据拷贝到 Host
-    // 上，并更新 imgData 指针。原来的数据将会被释放。如果原始图像为内存映射，
-    // 则此处会做解除映射操作，使其恢复为普通 Host 图像。
+    // 上，并更新 imgData 指针。原来的数据将会被释放。
     static __host__ int  // 返回值：函数是否正确执行，若函数正确执行，返回
                          // NO_ERROR。
     copyToHost(
@@ -175,27 +203,6 @@ public:
     copyToHost(
             Image *srcimg,  // 源图像，要求图像中必须有数据。
             Image *dstimg   // 目标图像，要求该图像必须经过 newImage 申请。
-    );
-    
-        
-    // Host 静态方法：mapToCurrentDevice（将图像映射到当前 Device 内存上）
-    // 将已经分配在 pinned memory 中的图像映射到当前 Device 上，也就是使用 
-    // zero-copy 功能，使 Device 可以在不进行内存拷贝的情况下使用位于 Host 内存
-    // 上的图像数据。应该注意，此时虽然图像所在位置被标记为当前 Device ，但实际
-    // 数据仍然存储于 Host 端。
-    static __host__ int  // 返回值：函数是否正确执行，若函数正确执行，返回
-                         // NO_ERROR。
-    mapToCurrentDevice(
-            Image *img   // 需要将数据映射到当前 Device 的原始图像。
-    );
-    
-    // Host 静态方法：unmapToHost（解除图像映射关系）
-    // 解除图像的内存映射关系，一般与 mapToCurrentDevice 成对使用。对于已经映射
-    // 到设备端的图像，将其恢复为普通 Host 端图像。
-    static __host__ int  // 返回值：函数是否正确执行，若函数正确执行，返回
-                         // NO_ERROR。
-    unmapToHost(
-            Image *img   // 需要解除内存映射关系的图像。
     );
     
     // 静态方法：roiSubImage（给出 ROI 指定的子图像）
@@ -245,7 +252,7 @@ public:
         // 子图像的 Device ID 和 Pitch 保持和输入图像相同。
         subimgCud->deviceId = inimgCud->deviceId;
         subimgCud->pitchBytes = inimgCud->pitchBytes;
-        subimgCud->mapSource = inimgCud->mapSource;
+
         // 处理完毕，退出。
         return NO_ERROR;
     }

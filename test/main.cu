@@ -15,6 +15,7 @@ int main()
     
     Image *inimg;
     ImageBasicOp::newImage(&inimg);
+    
     ImageBasicOp::readFromFile("hist_in.bmp", inimg);
     inimg->roiX1 = 400;
     inimg->roiY1 = 400;
