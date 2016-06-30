@@ -68,6 +68,8 @@ typedef struct ImageCuda_st {
                        // 据存储在 Host 内存上。
     size_t pitchBytes; // Padding 后图像每行数据所占内存的字节数，要求 
                        // pitchBytes >= width * sizeof (unsigned char)
+    unsigned char *out_imgData;
+    unsigned char *in_imgData;
 } ImageCuda;
 
 // 宏：IMAGE_CUDA
