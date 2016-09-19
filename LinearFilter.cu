@@ -5,7 +5,8 @@
 #include "LinearFilter.h"
 #include "ErrorCode.h"
 #include "ImageDiff.h"
-#include "Common.h"
+
+using namespace std;
 
 // 宏：DEF_BLOCK_X 和 DEF_BLOCK_Y
 // 定义了默认的线程块尺寸
@@ -38,6 +39,13 @@ _linearFilterKer(
         ImageCuda outimg,  // 输出图像
         TemplateCuda tpl,  // 模板
         int imptype        // 滤波操作的实现方式
+);
+
+static __global__ void
+_linearFilterKerWithDefTemplate(
+        ImageCuda inimg,   // 输入图像
+        ImageCuda outimg,  // 输出图像
+        int imptype        // 滤波操作的实现方式 
 );
 
 // Host 函数：_preOp（在算法操作前进行预处理）
@@ -82,7 +90,6 @@ static __host__ TemplateCuda *_initDefTemplate()
     Template *tmpdef;
     TemplateBasicOp::newTemplate(&tmpdef);
     TemplateBasicOp::makeAtHost(tmpdef, DEF_TEMPLATE_COUNT);
-    printf("%s\n", );
     _defTpl = TEMPLATE_CUDA(tmpdef);
     // 分别处理每一个点
     for (int i = 0; i < DEF_TEMPLATE_COUNT; i++) {
@@ -128,30 +135,14 @@ static __host__ int _copyDefTemplateToConstantMem(Template *tpl)
         // 将原来存储在 Host 上坐标数据拷贝到常量内存上。
         cuerrcode = cudaMemcpyToSymbol(devptr, tpl->tplData, 
                                        tpl->count * 2 * sizeof (int));
-        if (cuerrcode != cudaSuccess) {
-            cudaFree(devptr);
-            cudaFree(attachptr);
+        if (cuerrcode != cudaSuccess)
             return CUDA_ERROR;
-        }
 
         // 将原来存储在 Host 上附属数据拷贝到常量内存上。
         cuerrcode = cudaMemcpyToSymbol(attachptr, tplCud->attachedData,
                                        tpl->count * sizeof (float));
-        if (cuerrcode != cudaSuccess) {
-            cudaFree(devptr);
-            cudaFree(attachptr);
+        if (cuerrcode != cudaSuccess)
             return CUDA_ERROR;
-        }
-
-        // 释放掉原来存储于 Host 内存上的数据。
-        delete[] tpl->tplData;
-        delete[] tplCud->attachedData;
-
-        // 更新模版数据，把新的在当前 Device 上申请的数据和相关数据写入模版元数
-        // 据中。
-        tpl->tplData = devptr;
-        tplCud->attachedData = attachptr;
-        tplCud->deviceId = curdevid;
 
         // 操作完毕，返回。
         return NO_ERROR;
@@ -297,6 +288,143 @@ static __global__ void _linearFilterKer(ImageCuda inimg, ImageCuda outimg,
     }
 }
 
+static __global__ void _linearFilterKerWithDefTemplate(ImageCuda inimg, 
+                                                       ImageCuda outimg,
+                                                       int imptype)
+{
+    // dstc 和 dstr 分别表示线程处理的像素点的坐标的 x 和 y 分量 （其中，
+    // c 表示 column， r 表示 row）。由于采用并行度缩减策略 ，令一个线程
+    // 处理 4 个输出像素，这四个像素位于统一列的相邻 4 行上，因此，对于
+    // dstr 需要进行乘 4 的计算
+    int dstc = blockIdx.x * blockDim.x + threadIdx.x;
+    int dstr = (blockIdx.y * blockDim.y + threadIdx.y) * 4;
+                         
+    // 检查第一个像素点是否越界，如果越界，则不进行处理，一方面节省计算
+    // 资源，另一方面防止由于段错误导致程序崩溃
+    if (dstc >= inimg.imgMeta.width || dstr >= inimg.imgMeta.height)
+        return;
+
+    // 用来保存临时像素点的坐标的 x 和 y 分量
+    int dx, dy; 
+
+    // 用来记录当前模板所在的位置的指针
+    int *curtplptr = devptr;
+
+    // 用来记录当前输入图像所在位置的指针
+    unsigned char *curinptr;
+
+    // 用来存放模板中像素点的像素值加和
+    unsigned int tplsum[4] = { 0, 0, 0, 0 };
+    
+    // 用来记录当前滤波操作的除数
+    float tmpcount[4] = { 0, 0, 0, 0 };
+    
+    // 扫描模板范围内的每个输入图像的像素点
+    for (int i = 0; i < DEF_TEMPLATE_COUNT; i++) {
+        // 计算当前模板位置所在像素的 x 和 y 分量，模板使用相邻的两个下标的
+        // 数组表示一个点，所以使当前模板位置的指针作加一操作 
+        dx = dstc + *(curtplptr++);
+        dy = dstr + *(curtplptr++);
+        
+        // 先判断当前像素的 x 分量是否越界，如果越界，则跳过，扫描下一个模板点
+        // 如果没有越界，则分别处理当前列的相邻的 4 个像素
+        if (dx >= 0 && dx < inimg.imgMeta.width) { 
+            // 根据 dx 和 dy 获取第一个像素的位置
+            curinptr = inimg.imgMeta.imgData + dx + dy * inimg.pitchBytes;
+            
+            // 检测此像素的 y 分量是否越界    
+            if (dy >= 0 && dy < inimg.imgMeta.height) {     
+                // 将第一个像素点邻域内点的像素值累加     
+                tplsum[0] += (*curinptr) * (attachptr[i]);
+                
+                // 针对不同的实现类型，选择不同的路径进行处理
+                switch(imptype)
+                {
+                // 使用邻域像素总和除以像素点个数的运算方法实现线性滤波
+                case LNFT_COUNT_DIV:
+                    // 记录当前像素点邻域内已累加点的个数
+                    tmpcount[0] += 1;
+                    break;
+                        
+                 // 使用邻域像素总和除以像素点权重之和的运算方法实现线性滤波    
+                case LNFT_WEIGHT_DIV:
+                    // 记录当前像素点权重之和
+                    tmpcount[0] += attachptr[i];
+                    break;
+                       
+                // 使用邻域像素直接带权加和的运算方法实现线性滤波    
+                case LNFT_NO_DIV:
+                    // 设置除数为 1
+                    tmpcount[0] = 1;
+                    break;
+                }
+            }
+        
+            // 处理当前列的剩下的 3 个像素
+            for (int j = 1; j < 4; j++) {
+                // 获取当前像素点的位置
+                curinptr += inimg.pitchBytes;
+            
+                // 使 dy 加一，得到当前要处理的像素的 y 分量
+                dy++;
+           
+                // 检测 dy 是否越界，如果越界，则跳过，扫描下一个模板点
+                // 如果 y 分量未越界，则处理当前像素点
+                if (dy >= 0 && dy < inimg.imgMeta.height) {                    
+                    // 将当前像素点邻域内点的像素值累加
+                    tplsum[j] += (*curinptr) * (attachptr[i]);
+                    
+                    // 针对不同的实现类型，选择不同的路径进行处理
+                    switch(imptype)
+                    {
+                    // 使用邻域像素总和除以像素点个数的运算方法实现线性滤波
+                    case LNFT_COUNT_DIV:
+                        // 记录当前像素点邻域内已累加点的个数
+                        tmpcount[j] += 1;
+                        break;
+                        
+                    // 使用邻域像素总和除以像素点权重之和的运算方法实现线性滤波    
+                    case LNFT_WEIGHT_DIV:
+                        // 记录当前像素点权重之和
+                        tmpcount[j] += attachptr[i];
+                        break;
+                       
+                    // 使用邻域像素直接带权加和的运算方法实现线性滤波    
+                    case LNFT_NO_DIV:
+                        // 设置除数为 1
+                        tmpcount[j] = 1;
+                        break;
+                    }
+                }
+            } 
+        }
+    }
+    
+    // 将 4 个平均值分别赋值给对应的输出图像
+    // 定义输出图像位置的指针
+    unsigned char *outptr;
+ 
+    // 获取对应的第一个输出图像的位置
+    outptr = outimg.imgMeta.imgData + dstr * outimg.pitchBytes + dstc;
+    
+    // 计算邻域内点的像素平均值并赋值给输出图像
+    *outptr = (tplsum[0] / tmpcount[0]);
+
+    // 处理剩下的 3 个点
+    for (int i = 1; i < 4; i++) {
+        // 先判断 y 分量是否越界,如果越界，则可以确定后面的点也会越界，所以
+        // 直接返回
+        if (++dstr >= outimg.imgMeta.height) 
+            return; 
+
+        // 获取当前列的下一行的位置指针
+        outptr = outptr + outimg.pitchBytes;
+        
+        // 计算邻域内点的像素平均值并赋值给输出图像  
+        *outptr = (tplsum[i] / tmpcount[i]);
+    }
+}
+
 // Host 函数：_preOp（在算法操作前进行预处理）
 static __host__ int _preOp(Image *inimg, Image *outimg, Template *tp)
 {
@@ -313,7 +441,7 @@ static __host__ int _preOp(Image *inimg, Image *outimg, Template *tp)
         // 计算 roi 子图的宽和高
         int roiwidth = inimg->roiX2 - inimg->roiX1; 
         int roiheight = inimg->roiY2 - inimg->roiY1;
-        // 如果输出图像无数据，则会创建一个和输出图像子图像尺寸相同的图像
+        // 如果输出图像无数据，则会创建一个和输入图像子图像尺寸相同的图像
         errcode = ImageBasicOp::makeAtCurrentDevice(outimg, roiwidth, 
                                                     roiheight); 
         // 如果创建图像依然操作失败，则返回错误
@@ -470,10 +598,15 @@ __host__ int LinearFilter::linearFilter(Image *inimg, Image *outimg)
         return INVALID_DATA; 
      
     // 调用 Kernel 函数进行均值滤波操作
-    _linearFilterKer<<<gridsize, blocksize>>>(insubimgCud, 
-                                              outsubimgCud, 
-                                              *TEMPLATE_CUDA(tpl), 
-                                              impType);
+    if(tpl->count==DEF_TEMPLATE_COUNT)
+        _linearFilterKerWithDefTemplate<<<gridsize, blocksize>>>(insubimgCud, 
+                                                                 outsubimgCud,
+                                                                 impType);
+    else
+        _linearFilterKer<<<gridsize, blocksize>>>(insubimgCud, 
+                                                  outsubimgCud, 
+                                                  *TEMPLATE_CUDA(tpl), 
+                                                  impType);
     // 调用 cudaGetLastError 判断程序是否出错
     cudaError_t err;
     err = cudaGetLastError();
@@ -501,83 +634,98 @@ __host__ int LinearFilter::linearFilterMultiGPU(Image *inimg, Image *outimg)
     deviceinimg = imageCut(inimg);
     deviceoutimg = imageCut(outimg);
 
+    // 新的数据空间，在各个 Device 上。
+    unsigned char **devptrInImg, **devptrOutImg;
+    size_t *pitchinimg, *pitchoutimg;
+    devptrInImg=(unsigned char **)malloc(deviceCount*sizeof(unsigned char *));
+    devptrOutImg=(unsigned char **)malloc(deviceCount*sizeof(unsigned char *));
+    pitchinimg=(size_t*)malloc(deviceCount*sizeof(size_t));
+    pitchoutimg=(size_t*)malloc(deviceCount*sizeof(size_t));
+
     cudaStream_t stream[2];
     for(int i = 0; i < deviceCount; ++i){
         cudaSetDevice(i);
         cudaStreamCreate(&stream[i]);
-        
-        errcode = cudaMallocPitch((void **)(&deviceinimg[i].d_imgData), &deviceinimg[i].pitchBytes, 
+
+	    errcode = cudaMallocPitch((void **)&devptrInImg[i], &pitchinimg[i], 
                                   deviceinimg[i].imgMeta.width * sizeof (unsigned char), 
                                   deviceinimg[i].imgMeta.height);
-        if (errcode != cudaSuccess) {
-            return CUDA_ERROR;
-        }
+	    if (errcode != cudaSuccess)
+	        return CUDA_ERROR;
 
-        errcode = cudaMallocPitch((void **)(&deviceoutimg[i].d_imgData), &deviceoutimg[i].pitchBytes, 
-                                   deviceoutimg[i].imgMeta.width * sizeof (unsigned char), 
-                                   deviceoutimg[i].imgMeta.height);
-        if (errcode != cudaSuccess) {
-            return CUDA_ERROR;
-        }
+	    errcode = cudaMallocPitch((void **)&devptrOutImg[i], &pitchoutimg[i], 
+	                               deviceoutimg[i].imgMeta.width * sizeof (unsigned char), 
+	                               deviceoutimg[i].imgMeta.height);
+
+	    if (errcode != cudaSuccess){
+	    	cudaFree(devptrInImg[i]);
+	        return CUDA_ERROR;
+	    }
     }
+
+    // 暂存输出图像分块在 Host 内存中原地址的数组
+    unsigned char **tmpdevoutimgdata;
+    tmpdevoutimgdata=(unsigned char **)malloc(deviceCount*sizeof(unsigned char *));
 
     for(int i =0;i < deviceCount; ++i){
         cudaSetDevice(i);
-        errcode = cudaMemcpy2DAsync (deviceinimg[i].d_imgData, deviceinimg[i].pitchBytes, 
-                                     deviceinimg[i].imgMeta.imgData, deviceinimg[i].pitchBytes, 
-                                     deviceinimg[i].imgMeta.width * sizeof (unsigned char), 
-                                     deviceinimg[i].imgMeta.height,
-                                     cudaMemcpyHostToDevice, stream[i]);
-        if (errcode != cudaSuccess) {
-            return CUDA_ERROR;
-        }
+        errcode = cudaMemcpy2DAsync(devptrInImg[i], pitchinimg[i],
+		                        	deviceinimg[i].imgMeta.imgData, deviceinimg[i].pitchBytes, 
+		                        	deviceinimg[i].imgMeta.width * sizeof (unsigned char), 
+                                    deviceinimg[i].imgMeta.height,
+		                        	cudaMemcpyHostToDevice,stream[i]);
+	    if (errcode != cudaSuccess){
+	    	cudaFree(devptrInImg[i]);
+	    	cudaFree(devptrOutImg[i]);
+	        return CUDA_ERROR;
+	    }
 
-       
-        errcode = cudaMemcpy2DAsync (deviceoutimg[i].d_imgData,deviceoutimg[i].pitchBytes, 
-                                     deviceoutimg[i].imgMeta.imgData, deviceoutimg[i].pitchBytes, 
-                                     deviceoutimg[i].imgMeta.width * sizeof (unsigned char), 
-                                     deviceoutimg[i].imgMeta.height,
-                                     cudaMemcpyHostToDevice, stream[i]);
-        if (errcode != cudaSuccess) {
-            return CUDA_ERROR;
-        }
+	    // 保存输出图像在 Host 内存中的原地址
+	    tmpdevoutimgdata[i]=deviceoutimg[i].imgMeta.imgData;
 
-        if(tp->count==DEF_TEMPLATE_COUNT){
-        // 如果是默认大小的模板，则拷贝到常量内存中
-        errcode = _copyDefTemplateToConstantMem(tpl);
-        if (errcode != NO_ERROR)
-            return errcode; 
-        }
-        else{
-            // 否则，将模板拷贝到 Device 内存中
-            errcode = TemplateBasicOp::copyToCurrentDevice(tpl);
-            if (errcode != NO_ERROR)
-                return errcode;   
-        }
+	    // 更新图像数据，把新的在当前 Device 上申请的数据和相关数据写入图像元数
+	    // 据中。
+	    deviceinimg[i].imgMeta.imgData = devptrInImg[i];
+	    deviceoutimg[i].imgMeta.imgData = devptrOutImg[i];
+	    deviceinimg[i].deviceId = i;
+	    deviceoutimg[i].deviceId = i;
+	    deviceinimg[i].pitchBytes = pitchinimg[i];
+	    deviceoutimg[i].pitchBytes = pitchoutimg[i];
+
+        if(tpl->count==DEF_TEMPLATE_COUNT){
+	        // 如果是默认大小的模板，则拷贝到常量内存中
+	        errcode = _copyDefTemplateToConstantMem(tpl);
+	        if (errcode != NO_ERROR)
+	            return errcode; 
+	    }
+	    else{
+	        // 否则，将模板拷贝到 Device 内存中
+	        errcode = TemplateBasicOp::copyToCurrentDevice(tpl);
+	        if (errcode != NO_ERROR)
+	            return errcode;   
+	    }
 
         // 计算调用 Kernel 函数的线程块的尺寸和线程块的数量
-        errcode = _getBlockSize(outimg[i].imgMeta.width,
-                                outimg[i].imgMeta.height,
+        errcode = _getBlockSize(deviceoutimg[i].imgMeta.width,
+                                deviceoutimg[i].imgMeta.height,
                                 &gridsize, &blocksize);
         if (errcode != NO_ERROR) 
             return errcode;
 
-        _linearFilterKer<<<gridsize, blocksize, 0, stream[i]>>>(deviceinimg[i], 
-                                                                deviceoutimg[i], 
-                                                                *TEMPLATE_CUDA(tpl), 
-                                                                impType);
-        // 调用 cudaGetLastError 判断程序是否出错
-        if (cudaGetLastError() != cudaSuccess) 
-            return CUDA_ERROR;
-        errcode = cudaMemcpy2DAsync(deviceoutimg[i].imgMeta.imgData, deviceoutimg[i].pitchBytes, 
-                                    deviceoutimg[i].d_imgData, 
-                                    deviceoutimg[i].pitchBytes,
-                                    deviceoutimg[i].imgMeta.width, 
+        if(tpl->count==DEF_TEMPLATE_COUNT)
+        	_linearFilterKerWithDefTemplate<<<gridsize, blocksize, 0, stream[i]>>>(
+        		deviceinimg[i], deviceoutimg[i], impType);
+        else	
+        	_linearFilterKer<<<gridsize, blocksize, 0, stream[i]>>>(deviceinimg[i], 
+        		deviceoutimg[i], *TEMPLATE_CUDA(tpl), impType);
+        
+        errcode = cudaMemcpy2DAsync(tmpdevoutimgdata[i], outimg->width, 
+                                    deviceoutimg[i].imgMeta.imgData,deviceoutimg[i].pitchBytes,
+                                    outimg->width * sizeof (unsigned char), 
                                     deviceoutimg[i].imgMeta.height,
                                     cudaMemcpyDeviceToHost, stream[i]);
-        if (errcode != cudaSuccess) {
+        if (errcode != cudaSuccess)
             return CUDA_ERROR;
-        }
     }
 
     for(int i = 0; i < deviceCount; ++i) {
@@ -586,11 +734,16 @@ __host__ int LinearFilter::linearFilterMultiGPU(Image *inimg, Image *outimg)
         cudaStreamSynchronize(stream[i]);
         
         cudaStreamDestroy(stream[i]);
-        cudaFree(devicefrimg[i].d_imgData);
-        cudaFree(devicebaimg[i].d_imgData);
-        cudaFree(deviceoutimg[i].d_imgData);
+        cudaFree(deviceinimg[i].imgMeta.imgData);
+        cudaFree(deviceoutimg[i].imgMeta.imgData);
     }
+    cudaFreeHost(pitchinimg);
+	cudaFreeHost(pitchoutimg);
+	cudaFreeHost(tmpdevoutimgdata);
 
+    // 调用 cudaGetLastError 判断程序是否出错
+    if (cudaGetLastError() != cudaSuccess) 
+        return CUDA_ERROR;
     // 处理完毕，退出。
     return NO_ERROR;
 }

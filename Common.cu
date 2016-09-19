@@ -19,6 +19,7 @@
         deviceimg[i].imgMeta.width = img->width;
         deviceimg[i].imgMeta.height = (img->height)/deviceCount;
         deviceimg[i].pitchBytes = pitch;
+        deviceimg[i].deviceId=-1;
         deviceimg[i].imgMeta.imgData = img->imgData + i*deviceimg[i].imgMeta.width*
                                  deviceimg[i].imgMeta.height;
     }

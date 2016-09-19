@@ -69,6 +69,7 @@ typedef struct Image_st {
 // 常见不到也不需要了解此结构体。
 typedef struct ImageCuda_st {
     Image imgMeta;             // 图像数据，保存了对应的图像逻辑数据。
+    unsigned char *d_imgData;
     int deviceId;              // 当前数据所处的内存，若数据在 GPU 的内存上，则
                                // deviceId 为对应设备的编号；若 deviceId < 0，
                                // 则说明数据存储在 Host 内存上。

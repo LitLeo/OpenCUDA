@@ -23,7 +23,7 @@
 
 #include "Image.h"
 #include "Template.h"
-
+#include "Common.h"
 
 // 宏：LNFT_COUNT_DIV
 // 用于设置 LinearFilter 类中的 impType 成员变量，告知类的实例选用邻域像素总和
@@ -44,7 +44,7 @@
 // 类：LinearFilter（线性滤波算法）
 // 继承自：无
 // 根据给定模板，对邻域像素进行卷积运算，实现图像的线性滤波操作
-class LinearFilter {
+class LinearFilter: public cudaCommon {
 
 protected:
 
