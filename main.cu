@@ -5,31 +5,41 @@
 #include "timer.h"
 
 int main(int argc, char *argv[]){
-	Image *inImg,*outImg1,*outImg2;
+	Image *inImg,*outImg;
 	ImageBasicOp::newImage(&inImg);
     if(argc!=1)
         ImageBasicOp::readFromFile(argv[1],inImg);
     else
         ImageBasicOp::readFromFile("src.bmp",inImg);
         
-    ImageBasicOp::newImage(&outImg1);
-    ImageBasicOp::makeAtHost(outImg1,inImg->width,inImg->height);
-    ImageBasicOp::newImage(&outImg2);
-    ImageBasicOp::makeAtHost(outImg2,inImg->width,inImg->height);
+    ImageBasicOp::newImage(&outImg);
+    ImageBasicOp::makeAtHost(outImg,inImg->width,inImg->height);
     LinearFilter LF;
 
+    cudaSetDevice(0);
     warmup();
-    StartTimer();
-    LF.linearFilter(inImg,outImg1);
-    printf("  GPU Processing time: %f (ms)\n\n", GetTimer());
+    cudaSetDevice(1);
+    warmup();
+    cudaSetDevice(0);
 
-    StartTimer();
-    LF.linearFilterMultiGPU(inImg,outImg2);
-    printf("  Multi GPU Processing time: %f (ms)\n\n", GetTimer());
+    int choise=0;
+    while(choise!=1&&choise!=2){
+        printf("Single or multi GPU?\n1.Single GPU\n2.Multi GPU\n");
+        scanf("%d",&choise);
+    }
 
-    ImageBasicOp::writeToFile("dest1.bmp",outImg1);
-    ImageBasicOp::writeToFile("dest2.bmp",outImg2);
-    ImageBasicOp::deleteImage(outImg1);
-    ImageBasicOp::deleteImage(outImg2);
+    if(choise == 1){
+        StartTimer();
+        LF.linearFilter(inImg,outImg);
+        printf("  GPU Processing time: %f (ms)\n\n", GetTimer());
+    }
+    else{
+        StartTimer();
+        LF.linearFilterMultiGPU(inImg,outImg);
+        printf("  Multi GPU Processing time: %f (ms)\n\n", GetTimer());
+    }
+
+    ImageBasicOp::writeToFile("dest.bmp",outImg);
+    ImageBasicOp::deleteImage(outImg);
     return 0;
 }
