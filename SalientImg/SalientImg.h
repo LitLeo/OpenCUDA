@@ -92,7 +92,7 @@ public:
 		Image* advansalientimg,	 // 输入的预显著图像。
 		Image* gausssmoothimg,	 // 输入的高斯平滑图像。
 		Image* salientimg		 // 输出的显著图想。
-	)
+	);
 };
 
 #endif

@@ -2,6 +2,7 @@
 #include <stdio.h>
 using namespace std;
 
+#include "common.h"
 #include "Image.h"
 #include "SalientImg.h"
 #include "timer.h"
@@ -34,16 +35,18 @@ int main(int argc, char *argv[])
     ImageBasicOp::readFromFile(inimgfilename,outimg);
     SalientImg T;
 
-    // 预热 http://blog.csdn.net/litdaguang/article/details/50520549
-    warmup();
-    // cout << argc << argv[2] << endl;
+    // 预热 http://blog.csdn.net/litdaguang/article/details/50520549这里要用循环
+    for(unsigned i = 0; i < deviceCount; ++i) {
+        cudaSetDevice(i);
+        warmup();
+    }
     if(argc > 2) {
         StartTimer();
         T.advanSalientMultiGPU(frimg,outimg);
         printf(" Multi GPU Processing time: %f (ms)\n\n", GetTimer());
     } else {
         StartTimer();
-        T.tattoo(frimg,baimg,outimg);
+        T.advanSalient(frimg,outimg);
         printf("  GPU Processing time: %f (ms)\n\n", GetTimer());
     }
 	if(argc > 2) {

@@ -13,29 +13,6 @@ using namespace std;
 // Host 静态方法：newImage（创建图像）
 __host__ int ImageBasicOp::newImage(Image **outimg)
 {
-    // 静态局部变量，标记是否设置过设备属性。
-    static bool flagSetted  = false;
-    
-    // 判断设备是否设置过使用内存映射
-    if (!flagSetted) {
-        // 错误码
-        cudaError_t cuerrcode;
-
-        // 获取设备属性，检查是否可以使用内存映射功能。
-        cudaDeviceProp deviceProp;  
-        cudaGetDeviceProperties(&deviceProp, 0);
-        if (!deviceProp.canMapHostMemory)
-            return CUDA_ERROR; 
-
-        // 设置设备属性为使用内存映射模式。
-        cuerrcode = cudaSetDeviceFlags(cudaDeviceMapHost);  
-        if (cuerrcode != cudaSuccess) 
-            return CUDA_ERROR;   
-        
-        // 将标记更新为已设置
-        flagSetted = true;
-    }
-
     ImageCuda *resimgCud;  // 对应于返回的 outimg 的 ImageCuda 型数据。
 
     // 检查装载输出图像的指针是否为 NULL。
@@ -55,11 +32,10 @@ __host__ int ImageBasicOp::newImage(Image **outimg)
     resimgCud->imgMeta.imgData = NULL;
     resimgCud->deviceId = -1;
     resimgCud->pitchBytes = 0;
-    resimgCud->mapSource = NULL;
 
     // 将 Image 赋值给输出参数。
     *outimg = &(resimgCud->imgMeta);
-    
+
     // 处理完毕，返回。
     return NO_ERROR;
 }
@@ -81,14 +57,6 @@ __host__ int ImageBasicOp::deleteImage(Image *inimg)
     if (inimgCud->deviceId >= devcnt)
         return OP_OVERFLOW;
 
-    // 如果原图像为内存映射图像，应该先解除内存映射，以保证正确释放地址空间。 
-    if (inimgCud->mapSource != NULL) {
-        int errcode;
-        errcode = ImageBasicOp::unmapToHost(inimg);
-        if (errcode < NO_ERROR)
-            return errcode;
-    }
-        
     // 获取当前 Device ID。
     int curdevid;
     cudaGetDevice(&curdevid);
@@ -99,13 +67,12 @@ __host__ int ImageBasicOp::deleteImage(Image *inimg)
         // 如果输入图像是空的，则不进行图像数据释放操作（因为本来也没有数据可被
         // 释放）。
         // Do Nothing;
-    } 
-    if (inimgCud->deviceId < 0) {
-        // 对于数据存储于主机 pinned 内存，调用 cudaFreeHost 释放图像数据。
-        cudaFreeHost(inimg->imgData); 
+    } if (inimgCud->deviceId < 0) {
+        // 对于数据存储于 Host 内存，直接利用 delete 关键字释放图像数据。
+        delete[] inimg->imgData;
     } else if (inimgCud->deviceId == curdevid) {
-        // 对于数据存储于当前 Device 内存中，对于普通图像，直接利用 cudaFree 
-        // 接口释放该图像数据。
+        // 对于数据存储于当前 Device 内存中，则直接利用 cudaFree 接口释放该图像
+        // 数据。
         cudaFree(inimg->imgData);
     } else {
         // 对于数据存储于非当前 Device 内存中，则需要首先切换设备，将该设备作为
@@ -141,7 +108,7 @@ __host__ int ImageBasicOp::makeAtCurrentDevice(Image *img,
 
     // 获取 img 对应的 ImageCuda 型数据。
     ImageCuda *imgCud = IMAGE_CUDA(img);
-        
+
     // 在当前的 Device 上申请存储指定尺寸图片所需要的内存空间。
     cudaError_t cuerrcode;
     cuerrcode = cudaMallocPitch((void **)(&img->imgData), &imgCud->pitchBytes,
@@ -189,13 +156,9 @@ __host__ int ImageBasicOp::makeAtHost(Image *img,
     ImageCuda *imgCud = IMAGE_CUDA(img);
 
     // 为图像数据在 Host 内存中申请空间
-    cudaError_t cuerrcode;
-    cuerrcode = cudaHostAlloc((void**)&(img->imgData), width * height * 
-                              sizeof(unsigned char),cudaHostAllocMapped);
-    if (cuerrcode != cudaSuccess) {
-        img->imgData = NULL;
-        return CUDA_ERROR;
-    }
+    img->imgData = new unsigned char[width * height];
+    if (img->imgData == NULL)
+        return OUT_OF_MEM;
 
     // 设置图像中的元数据
     img->width = width;
@@ -266,30 +229,18 @@ __host__ int ImageBasicOp::readFromFile(const char *filepath, Image *outimg)
     unsigned int dataoff = 0;
     imgfile.seekg(0x000A, ios::beg);
     imgfile.read(reinterpret_cast<char *>(&dataoff), 4);
-    
-    // 如果图像是内存映射图像，则应先解除内存映射，以保证正确操作 Host 内存。
-    if (outimgCud->mapSource != NULL) {
-        int errcode;
-        errcode = ImageBasicOp::unmapToHost(outimg);
-        if (errcode < 0)
-            return errcode;
-    }
-    
+
     // 获取存放图像像素数据的 Host 内存空间。本着尽量重用的思想，如果原来的图像
     // 内存数据是存储于 Host 内存，且尺寸和新的图像尺寸一致时，则不重新申请
     // Host 内存空间，直接利用原来的空间存放新的图像数据。
     unsigned char *imgdata = outimg->imgData;
     bool reusedata = true;
-    if (outimg->imgData == NULL || outimgCud->deviceId >= 0 || 
+    if (outimg->imgData == NULL || outimgCud->deviceId >= 0 ||
         outimg->width != width || outimg->height != height) {
-        // 为图像数据在 Host 上申请 pinned memory，
-        // 并设置参数为使用内存映射功能。
-        cudaError_t cuerrcode;
-        cuerrcode = cudaHostAlloc((void**)&imgdata, width * height * 
-                                  sizeof(unsigned char),cudaHostAllocMapped);
-        if (cuerrcode != cudaSuccess) 
-            return CUDA_ERROR;
-
+        imgdata = new unsigned char[width * height];
+        // 如果没有申请到新的数据，则报错。
+        if (imgdata == NULL)
+            return OUT_OF_MEM;
         reusedata = false;
     }
 
@@ -322,11 +273,10 @@ __host__ int ImageBasicOp::readFromFile(const char *filepath, Image *outimg)
     // 到此为止，图像数据读取完毕，这是可以安全的释放掉图像原来的数据。一直拖到
     // 最后才释放原来的数据，正是为了防止一旦图像读取失败，不至于让系统进入一个
     // 混乱的状态，因为原来的数据还是处于一个可用的状态。
- 
-    if (reusedata == false && outimg->imgData != NULL) {
+    if (reusedata == false || outimg->imgData != NULL) {
         if (outimgCud->deviceId < 0) {
-            // 原来的数据存放于 Host 内存中则调用 cudaFreeHost 释放。
-            cudaFreeHost(outimg->imgData); 
+            // 如果原来的数据存放于 Host 内存中，则使用 delete 关键字释放。
+            delete[] outimg->imgData;
         } else {
             // 如果原来的数据存放于 Device 内存中，则首先调到对应的 Device，然
             // 后使用 cudaFree 释放掉内存。
@@ -346,7 +296,6 @@ __host__ int ImageBasicOp::readFromFile(const char *filepath, Image *outimg)
     outimg->imgData = imgdata;
     outimgCud->deviceId = -1;
     outimgCud->pitchBytes = width;
-    outimgCud->mapSource = NULL;
 
     // 处理完毕，返回。
     return NO_ERROR;
@@ -361,7 +310,7 @@ __host__ int ImageBasicOp::writeToFile(const char *filepath, Image *inimg)
 
     // 打开需要写入的文件。
     ofstream imgfile(filepath, ios::out | ios::binary);
-    if (!imgfile) 
+    if (!imgfile)
         return NO_FILE;
 
     // 根据输入参数的 Image 型指针，得到对应的 ImageCuda 型数据。
@@ -491,12 +440,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *img)
 
     // 根据输入参数的 Image 型指针，得到对应的 ImageCuda 型数据。
     ImageCuda *imgCud = IMAGE_CUDA(img);
-    
-    // 检查图像所在的地址空间是否合法，如果图像已经映射至 Device ，
-    // 则不能使用 In-Place 式的 copy ，该函数报“数据溢出”错误，表示无法处理。
-    if (imgCud->mapSource != NULL)
-        return OP_OVERFLOW;
-        
+
     // 检查图像所在的地址空间是否合法，如果图像所在地址空间不属于 Host 或任何一
     // 个 Device，则该函数报“数据溢出”错误，表示无法处理。
     int devcnt;
@@ -509,8 +453,8 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *img)
     cudaGetDevice(&curdevid);
 
     // 如果图像是一个不包含数据的空图像，则报错。
-    if (img->imgData == NULL || img->width == 0 || img->height == 0 || 
-        imgCud->pitchBytes == 0) 
+    if (img->imgData == NULL || img->width == 0 || img->height == 0 ||
+        imgCud->pitchBytes == 0)
         return UNMATCH_IMG;
 
     // 对于不同的情况，将图像数据拷贝到当前设备上。
@@ -522,17 +466,17 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *img)
         cudaError_t cuerrcode;  // CUDA 调用返回的错误码。
 
         // 在当前设备上申请空间，使用 Pitch 版本的申请函数，用来进行 Padding。
-        cuerrcode = cudaMallocPitch((void **)(&devptr), &pitch, 
-                                    img->width * sizeof (unsigned char), 
+        cuerrcode = cudaMallocPitch((void **)(&devptr), &pitch,
+                                    img->width * sizeof (unsigned char),
                                     img->height);
         if (cuerrcode != cudaSuccess)
             return CUDA_ERROR;
 
         // 进行 Padding 并拷贝数据到当前 Device 上。注意，这里 img->pitchBytes
         // == img->width。
-        cuerrcode = cudaMemcpy2D(devptr, pitch, 
+        cuerrcode = cudaMemcpy2D(devptr, pitch,
                                  img->imgData, imgCud->pitchBytes,
-                                 img->width * sizeof (unsigned char), 
+                                 img->width * sizeof (unsigned char),
                                  img->height,
                                  cudaMemcpyHostToDevice);
         if (cuerrcode != cudaSuccess) {
@@ -541,8 +485,8 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *img)
         }
 
         // 释放掉原来存储于 Host 内存上的图像数据。
-        cudaFreeHost(img->imgData); 
-        
+        delete[] img->imgData;
+
         // 更新图像数据，把新的在当前 Device 上申请的数据和相关数据写入图像元数
         // 据中。
         img->imgData = devptr;
@@ -565,7 +509,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *img)
             return CUDA_ERROR;
 
         // 将数据从图像原来的存储位置拷贝到当前的 Device 上。
-        cuerrcode = cudaMemcpyPeer(devptr, curdevid, 
+        cuerrcode = cudaMemcpyPeer(devptr, curdevid,
                                    img->imgData, imgCud->deviceId,
                                    datasize);
         if (cuerrcode != cudaSuccess) {
@@ -605,7 +549,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
     ImageCuda *srcimgCud = IMAGE_CUDA(srcimg);
     ImageCuda *dstimgCud = IMAGE_CUDA(dstimg);
 
-    // 用来存放旧的数据，使得在拷贝操作失败时可以恢复为原来的可用的数据
+    // 用来存放旧的 dstimg 数据，使得在拷贝操作失败时可以恢复为原来的可用的数据
     // 信息，防止系统进入一个混乱的状态。
     ImageCuda olddstimgCud = *dstimgCud;  // 旧的 dstimg 数据
     bool reusedata = true;                // 记录是否重用了原来的图像数据空间。
@@ -617,7 +561,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
     if (srcimg->imgData == NULL || srcimg->width == 0 || srcimg->height == 0 ||
         srcimgCud->pitchBytes == 0)
         return INVALID_DATA;
-  
+
     // 检查图像所在的地址空间是否合法，如果图像所在地址空间不属于 Host 或任何一
     // 个 Device，则该函数报“数据溢出”错误，表示无法处理。
     int devcnt;
@@ -639,7 +583,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
         // 对于数据存在 Host 或其他的 Device 上，则直接释放掉原来的数据空间。
         reusedata = 0;
         dstimg->imgData = NULL;
-    } else if (!(((srcimgCud->deviceId < 0 && 
+    } else if (!(((srcimgCud->deviceId < 0 &&
                    srcimg->width == dstimg->width) ||
                   dstimgCud->pitchBytes == srcimgCud->pitchBytes) &&
                  srcimg->height == dstimg->height)) {
@@ -664,10 +608,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
 
     // 更改目标图像的数据存储位置为当前 Device。
     dstimgCud->deviceId = curdevid;
-    
-    // 将 Device 端图像的映射地址设置为空。
-    dstimgCud->mapSource = NULL;
-    
+
     // 将图像数据从源图像中拷贝到目标图像中。
     if (srcimgCud->deviceId < 0) {
         // 如果源图像数据存储于 Host 内存，则使用 cudaMemcpy2D 进行 Padding 形
@@ -678,13 +619,13 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
         // 么目标图像原本的数据空间不合适，需要重新申请。这时，需要为目标图像重
         // 新在当前 Device 上申请一个合适的数据空间。
         if (dstimg->imgData == NULL) {
-            cuerrcode = cudaMallocPitch((void **)(&dstimg->imgData), 
+            cuerrcode = cudaMallocPitch((void **)(&dstimg->imgData),
                                         &dstimgCud->pitchBytes,
-                                        dstimg->width * sizeof (unsigned char), 
+                                        dstimg->width * sizeof (unsigned char),
                                         dstimg->height);
             if (cuerrcode != cudaSuccess) {
-                // 如果申请内存的操作失败，则在报错返回前需要将旧的图像数据
-                // 恢复到图像中，以保证系统接下的操作不至于混乱。
+                // 如果申请内存的操作失败，则再报错返回前需要将旧的目标图像数据
+                // 恢复到目标图像中，以保证系统接下的操作不至于混乱。
                 *dstimgCud = olddstimgCud;
                 return CUDA_ERROR;
             }
@@ -693,12 +634,12 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
         // 使用 cudaMemcpy2D 进行 Padding 形式的拷贝。
         cuerrcode = cudaMemcpy2D(dstimg->imgData, dstimgCud->pitchBytes,
                                  srcimg->imgData, srcimgCud->pitchBytes,
-                                 srcimg->width * sizeof (unsigned char), 
+                                 srcimg->width * sizeof (unsigned char),
                                  srcimg->height,
                                  cudaMemcpyHostToDevice);
-        if (cuerrcode != cudaSuccess) {   
-            // 如果拷贝操作失败，则再报错退出前，需要将旧的图像数据恢复到原始
-            // 图像中。此外，如果数据不是重用的，则需要释放新申请的数据空间，
+        if (cuerrcode != cudaSuccess) {
+            // 如果拷贝操作失败，则再报错退出前，需要将旧的目标图像数据恢复到目
+            // 标图像中。此外，如果数据不是重用的，则需要释放新申请的数据空间，
             // 防止内存泄漏。
             if (!reusedata)
                 cudaFree(dstimg->imgData);
@@ -706,8 +647,8 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
             return CUDA_ERROR;
         }
     } else {
-        
-        // 如果源图像数据存储于 Device 内存（无论是当前 Device 还是其他的 
+
+        // 如果源图像数据存储于 Device 内存（无论是当前 Device 还是其他的
         // Device），都是用端到端的拷贝。
         cudaError_t cuerrcode;  // CUDA 调用返回的错误码。
         size_t datasize = srcimgCud->pitchBytes * srcimg->height;
@@ -722,7 +663,7 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
                 return CUDA_ERROR;
             }
         }
-        
+
         // 更新目标图像的 Padding 尺寸与源图像相同。注意，因为源图像也存储在
         // Device 上，在 Device 上的数据都是经过 Padding 的，又因为
         // cudaMemcpyPeer 方法没有提供 Pitch 版本接口，所以，我们这里直接借用源
@@ -735,8 +676,8 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
                                    srcimg->imgData, srcimgCud->deviceId,
                                    datasize);
         if (cuerrcode != cudaSuccess) {
-            // 如果拷贝操作失败，则在报错退出前，需要将旧的图像数据恢复到原始
-            // 图像中。此外，如果数据不是重用的，则需要释放新申请的数据空间，
+            // 如果拷贝操作失败，则再报错退出前，需要将旧的目标图像数据恢复到目
+            // 标图像中。此外，如果数据不是重用的，则需要释放新申请的数据空间，
             // 防止内存泄漏。
             if (!reusedata)
                 cudaFree(dstimg->imgData);
@@ -749,15 +690,10 @@ __host__ int ImageBasicOp::copyToCurrentDevice(Image *srcimg, Image *dstimg)
     // 的数据空间已毫无用处。本步骤就是释放掉旧的数据空间以防止内存泄漏。这里，
     // 作为拷贝的 olddstimgCud 是局部变量，因此相应的元数据会在本函数退出后自动
     // 释放，不用理会。
-
-    // 释放旧的内存空间。
-    if (olddstimgCud.mapSource != NULL){ 
-        // 如果原始目标图像数据是内存映射图，应该无条件释放主机端数据
-        cudaFreeHost(olddstimgCud.mapSource); 
-    } else if (olddstimgCud.imgMeta.imgData != NULL) {
+    if (olddstimgCud.imgMeta.imgData != NULL) {
         if (olddstimgCud.deviceId < 0) {
             // 如果旧数据空间是 Host 内存上的，则需要无条件释放。
-             cudaFreeHost(olddstimgCud.imgMeta.imgData); 
+            delete[] olddstimgCud.imgMeta.imgData;
         } else if (olddstimgCud.deviceId != curdevid) {
             // 如果旧数据空间不是当前 Device 内存上的其他 Device 内存上的数据，
             // 则也需要无条件的释放。
@@ -791,50 +727,44 @@ __host__ int ImageBasicOp::copyToHost(Image *img)
     cudaGetDeviceCount(&devcnt);
     if (imgCud->deviceId >= devcnt)
         return OP_OVERFLOW;
-        
+
     // 获取当前 Device ID。
     int curdevid;
     cudaGetDevice(&curdevid);
 
     // 如果图像是一个不包含数据的空图像，则报错。
-    if (img->imgData == NULL || img->width == 0 || img->height == 0 || 
-        imgCud->pitchBytes == 0) 
+    if (img->imgData == NULL || img->width == 0 || img->height == 0 ||
+        imgCud->pitchBytes == 0)
         return UNMATCH_IMG;
 
     // 对于不同的情况，将图像数据拷贝到当前设备上。
     if (imgCud->deviceId < 0) {
-        // 如果图像位于 Host 上，则不需要进行任何操作。
+        // 如果图像位于 Host 内存上，则不需要进行任何操作。
         return NO_ERROR;
+
     } else {
-        // 如果图像数据为主机端内存映射，则通过解除映射的方式使图像回到 Host 。
-        if (imgCud->mapSource != NULL)
-            return ImageBasicOp::unmapToHost(img);
-            
         // 如果图像的数据位于 Device 内存上，则需要在 Host 的内存空间上申请空
         // 间，然后将数据消除 Padding 后拷贝到 Host 上。
         unsigned char *hostptr;  // 新的数据空间，在 Host 上。
         cudaError_t cuerrcode;   // CUDA 调用返回的错误码。
 
         // 在 Host 上申请空间。
-        cuerrcode = cudaHostAlloc((void**)&(hostptr), img->width *
-                                  img->height * sizeof(unsigned char),
-                                  cudaHostAllocMapped);
-        if (cuerrcode != cudaSuccess) {
-                return CUDA_ERROR;
-        }
+        hostptr = new unsigned char[img->width * img->height];
+        if (hostptr == NULL)
+            return OUT_OF_MEM;
 
         // 将设备切换到数据所在的 Device 上。
         cudaSetDevice(imgCud->deviceId);
 
         // 消除 Padding 并拷贝数据
-        cuerrcode = cudaMemcpy2D(hostptr, img->width, 
+        cuerrcode = cudaMemcpy2D(hostptr, img->width,
                                  img->imgData, imgCud->pitchBytes,
                                  img->width, img->height,
                                  cudaMemcpyDeviceToHost);
         if (cuerrcode != cudaSuccess) {
             // 如果拷贝失败，则需要释放掉刚刚申请的内存空间，以防止内存泄漏。之
             // 后报错返回。
-            cudaFreeHost(hostptr); 
+            delete[] hostptr;
             return CUDA_ERROR;
         }
 
@@ -875,8 +805,8 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     // 获取 srcimg 和 dstimg 对应的 ImageCuda 型指针。
     ImageCuda *srcimgCud = IMAGE_CUDA(srcimg);
     ImageCuda *dstimgCud = IMAGE_CUDA(dstimg);
-    
-    // 用来存放旧的图像数据，使得在操作失败时可以恢复为原来的可用的数据
+
+    // 用来存放旧的 dstimg 数据，使得在拷贝操作失败时可以恢复为原来的可用的数据
     // 信息，防止系统进入一个混乱的状态。
     ImageCuda olddstimgCud = *dstimgCud;  // 旧的 dstimg 数据
     bool reusedata = true;                // 记录是否重用了原来的图像数据空间。
@@ -895,15 +825,7 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     cudaGetDeviceCount(&devcnt);
     if (srcimgCud->deviceId >= devcnt || dstimgCud->deviceId >= devcnt)
         return OP_OVERFLOW;
-     
-    // 如果目标图像为内存映射图像，应该先解除内存映射，以便正确判断是否重用数据。
-    if (dstimgCud->mapSource != NULL) {
-        int errcode;
-        errcode = ImageBasicOp::unmapToHost(dstimg);
-        if (errcode < 0)
-            return errcode;
-    }
- 
+
     // 获取当前 Device ID。
     int curdevid;
     cudaGetDevice(&curdevid);
@@ -916,14 +838,14 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     // 会真正的将原来的图像数据释放掉。
     if (dstimgCud->deviceId >= 0) {
         // 对于数据存在于 Device 上，则亦直接释放掉原来的数据空间。
-        reusedata = false;
+        reusedata = 0;
         dstimg->imgData = NULL;
     } else if (!(srcimg->width == dstimg->width &&
                  srcimg->height == dstimg->height)) {
         // 对于数据存在于 Host 上，则需要检查数据的尺寸是否和源图像相匹配。检查
         // 的标准：源图像和目标图像的尺寸相同时，可重用原来的空间。
-        reusedata = false;
-        dstimg->imgData = NULL;  
+        reusedata = 0;
+        dstimg->imgData = NULL;
     }
 
     // 将目标图像的尺寸更改为源图像的尺寸。
@@ -944,15 +866,13 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     dstimgCud->pitchBytes = dstimg->width;
 
     // 如果目标图像的 imgData == NULL，说明目标图像原本要么是一个空图像，要么目
-    // 标图像原本的数据空间不合适，需要重新申请。这时，需要为目标图像重新在 
+    // 标图像原本的数据空间不合适，需要重新申请。这时，需要为目标图像重新在
     // Host 上申请一个合适的数据空间。
     if (dstimg->imgData == NULL) {
-        cudaError_t cuerrcode;
-        cuerrcode = cudaHostAlloc((void**)&(dstimg->imgData), srcimg->width * 
-                                  srcimg->height * sizeof(unsigned char),
-                                  cudaHostAllocMapped);
-        if (cuerrcode != cudaSuccess) {
-            // 如果申请内存的操作失败，则在报错返回前需要将旧的目标图像数据
+        dstimg->imgData = new unsigned char[srcimg->width *
+                                            srcimg->height];
+        if (dstimg->imgData == NULL) {
+            // 如果申请内存的操作失败，则再报错返回前需要将旧的目标图像数据
             // 恢复到目标图像中，以保证系统接下的操作不至于混乱。
             *dstimgCud = olddstimgCud;
             return OUT_OF_MEM;
@@ -966,10 +886,11 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
 
         // 将 srcimg 内的图像数据拷贝到 dstimg 中。memcpy 不返回错误，因此，没
         // 有进行错误检查。
-        memcpy(dstimg->imgData, srcimg->imgData, 
+        memcpy(dstimg->imgData, srcimg->imgData,
                srcimg->width * srcimg->height * sizeof (unsigned char));
+
     } else {
-        // 如果源图像数据存储于 Device 内存（无论是当前 Device 还是其他的 
+        // 如果源图像数据存储于 Device 内存（无论是当前 Device 还是其他的
         // Device），都是 2D 形式的拷贝，并消除 Padding。
         cudaError_t cuerrcode;                     // CUDA 调用返回的错误码。
 
@@ -982,13 +903,12 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
                                  srcimg->imgData, srcimgCud->pitchBytes,
                                  srcimg->width, srcimg->height,
                                  cudaMemcpyDeviceToHost);
-
         if (cuerrcode != cudaSuccess) {
             // 如果拷贝操作失败，则再报错退出前，需要将旧的目标图像数据恢复到目
             // 标图像中。此外，如果数据不是重用的，则需要释放新申请的数据空间，
             // 防止内存泄漏。最后，还需要把 Device 切换回来，以免整个程序乱套。
             if (!reusedata)
-                cudaFreeHost(dstimg->imgData);
+                delete[] dstimg->imgData;
             *dstimgCud = olddstimgCud;
             cudaSetDevice(curdevid);
             return CUDA_ERROR;
@@ -1002,19 +922,8 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     // 的数据空间已毫无用处。本步骤就是释放掉旧的数据空间以防止内存泄漏。这里，
     // 作为拷贝的 olddstimgCud 是局部变量，因此相应的元数据会在本函数退出后自动
     // 释放，不用理会。
-    
-    // 如果原始目标图像数据是内存映射图，应该先将数据指针恢复为主机端指针，
-    // 然后进行释放操作，以保证可以正确使用释放方法。
-    if (olddstimgCud.mapSource != NULL){
-        // 将图像数据指针改回原始 Host 端指针。
-        olddstimgCud.imgMeta.imgData = olddstimgCud.mapSource;
-        // 图像所在位置改为 Host 。
-        olddstimgCud.deviceId = -1;
-    }
-
-    // 释放旧的内存空间。
     if (olddstimgCud.imgMeta.imgData != NULL) {
-        if (olddstimgCud.deviceId >= 0) {
+        if (olddstimgCud.deviceId > 0) {
             // 如果旧数据是存储于 Device 内存上的数据，则需要无条件的释放。
             cudaSetDevice(olddstimgCud.deviceId);
             cudaFree(olddstimgCud.imgMeta.imgData);
@@ -1022,7 +931,7 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
         } else if (!reusedata) {
             // 如果旧数据就在 Host 内存上，则对于 reusedata 未置位的情况进行释
             // 放，因为一旦置位，旧的数据空间就被用于承载新的数据，则不能释放。
-            cudaFreeHost(olddstimgCud.imgMeta.imgData);
+            delete[] olddstimgCud.imgMeta.imgData;
         }
     }
 
@@ -1030,93 +939,53 @@ __host__ int ImageBasicOp::copyToHost(Image *srcimg, Image *dstimg)
     return NO_ERROR;
 }
 
-// Host 静态方法：mapToCurrentDevice（将图像映射到当前 Device 内存上）
-__host__ int ImageBasicOp::mapToCurrentDevice(Image *img)
-{ 
-    // 局部变量，错误码。
-    cudaError_t cuerrcode; 
-    
-    // 检查图像是否为 NULL。由于内存映射功能需要同时维护 Device 端和 Host 端
-    // 两个指针，因此必须要两个图像分别位于 Device 端和 Host 上
-    if (img == NULL)
-        return NULL_POINTER;
-
-    // 获取 srcimg 和 dstimg 对应的 ImageCuda 型指针。
-    ImageCuda *imgCud = IMAGE_CUDA(img);
-    
-    // 如果图像已经进行了内存映射，则不用进行处理。
-    if (imgCud->mapSource != NULL)
-        return NO_ERROR;
-
-    // 检查图像所在的地址空间是否合法，如果源图像所在地址空间不属于 Host 端，
-    // 则该函数报“数据溢出”错误，表示无法处理。 
-    if (imgCud->deviceId >= 0)
-        return OP_OVERFLOW;
-        
-    // 如果源图像是一个空图像，则不进行任何操作，直接报错。
-    if (img->imgData == NULL || img->width == 0 || img->height == 0 ||
-        imgCud->pitchBytes == 0)
-        return INVALID_DATA;
-        
-    // 新的 Device 端指针
-    unsigned char *devptr;  
- 
-    // 根据源图像 host 端指针获取 device 端指针
-    cuerrcode = cudaHostGetDevicePointer((void **)&devptr, 
-                                         (void *)img->imgData, 0);
-    if (cuerrcode != cudaSuccess)
-        return CUDA_ERROR;
-            
-    // 将映射源改为原始 Host 指针。
-    imgCud->mapSource = img->imgData;
-    
-    // 图像数据使用设备端指针。
-    img->imgData = devptr;
-    
-    // 获取当前 Device ID。
-    int curdevid;
-    cudaGetDevice(&curdevid);
-    // 图像所在位置改为当前 Device 。
-    imgCud->deviceId = curdevid;
-    
-    // 操作完毕，返回。
-    return NO_ERROR;
-}
-
-// Host 静态方法：unmapToHost（解除当前图像的内存映射）
-__host__ int ImageBasicOp::unmapToHost(Image *img)
+// Host 静态方法：cutImage（对图像进行切割）
+__host__ int ImageBasicOp::cutImage(Image *inimg, ImageCuda *subimgCud, int deviceCount,
+                      int *height)
 {
-    // 检查图像是否为 NULL。由于内存映射功能需要同时维护 Device 端和 Host 端
-    // 两个指针，因此必须要两个图像分别位于 Device 端和 Host 上
-    if (img == NULL)
+    // 检查输入图像是否为 NULL。
+    if (inimg == NULL || subimgCud == NULL || deviceCount <= 0)
         return NULL_POINTER;
 
-    // 获取 srcimg 和 dstimg 对应的 ImageCuda 型指针。
-    ImageCuda *imgCud = IMAGE_CUDA(img);   
-    
-    // 如果源图像是一个空图像，则不进行任何操作，直接报错。
-    if (img->imgData == NULL || img->width == 0 || img->height == 0 ||
-        imgCud->pitchBytes == 0)
-        return INVALID_DATA;
-        
-    // 检查图像所在的地址空间，如果源图像所在地址空间属于 Host 端，
-    // 则说明未进行内存映射，直接返回。 
-    if (imgCud->deviceId < 0)
-        return NO_ERROR;  
-        
-    // 如果图像位于 Device 且未进行过内存映射，则不能使用解除映射功能。       
-    if (imgCud->mapSource == NULL)
-        return OP_OVERFLOW;     
-        
-    // 将图像数据指针改回原始 Host 端指针。
-    img->imgData = imgCud->mapSource;
-    
-    // 将映射源改为空。
-    imgCud->mapSource = NULL;
-    
-    // 图像所在位置改为 Host 。
-    imgCud->deviceId = -1;
-    
-    // 操作完毕，返回。
+    if(height != NULL) {
+        // 如果height变量不为NULL，则要判断总和是否与inimg的height相等。
+        unsigned sum_h = 0;
+        for(unsigned i = 0; i < deviceCount; ++i)
+            sum_h += height[i];
+        if(sum_h != inimg->height)
+            return INVALID_DATA;
+
+        // 根据height 数组对图像进行分割
+        // 先对第一个图像进行赋值
+        subimgCud[0].imgMeta.imgData = inimg->imgData;
+        subimgCud[0].imgMeta.width = inimg->width;
+        subimgCud[0].imgMeta.height = height[0];
+        subimgCud[0].pitchBytes = inimg->width;
+        subimgCud[0].deviceId = 0;
+        // 剩下的图像在上一幅图像的基础上偏移指针。
+        for(unsigned i = 1; i < deviceCount; ++i) {
+            subimgCud[i].imgMeta.width = inimg->width;
+            subimgCud[i].imgMeta.height = height[i];
+            subimgCud[i].pitchBytes = inimg->width;
+            subimgCud[i].deviceId = i;
+            subimgCud[i].imgMeta.imgData = subimgCud[i-1].imgMeta.imgData +
+                                           height[i-1] * inimg->width;
+        }
+    } else {
+        // 对图像进行平均分割
+        unsigned _h = inimg->height / deviceCount;
+        for(unsigned i = 0; i < deviceCount; ++i) {
+            subimgCud[i].imgMeta.width = inimg->width;
+            subimgCud[i].imgMeta.height = _h;
+            subimgCud[i].pitchBytes = inimg->width;
+            subimgCud[i].deviceId = i;
+            subimgCud[i].imgMeta.imgData = inimg->imgData + (i * _h) *
+                                           inimg->width;
+        }
+        // 如果图像高度不是设备数的倍数，则将余数放到最后一个设备上处理。
+        // 可能大部分情况下图像高度都不是设备的倍数，所以这里省略判断语句。
+        subimgCud[deviceCount - 1].imgMeta.height += inimg->height % _h;
+    }
     return NO_ERROR;
 }
+
