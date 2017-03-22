@@ -1,6 +1,5 @@
 #include <iostream> 
 #include "CovarianceMatrix.h" 
-#include "ErrorCode.h" 
 using namespace std;
 #define DIMENSION 3 
                                                                                

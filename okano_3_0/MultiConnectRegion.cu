@@ -1,6 +1,5 @@
 #include "MultiConnectRegion.h"
-#include "ImageFilter.h"
-#include "ConnectRegion.h"
+
 #include <iostream>
 using namespace std;
 

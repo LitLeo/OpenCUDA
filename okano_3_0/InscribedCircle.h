@@ -17,7 +17,9 @@
 #include "Image.h"
 #include "DynamicArrays.h"
 #include "ErrorCode.h"
-
+#include "Template.h"
+#include "TemplateFactory.h"
+#include "SortArray.h"
 
 // 类：InscribedCircle（内接圆）
 // 继承自：无

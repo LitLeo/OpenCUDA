@@ -14,6 +14,7 @@
 
 #include "ErrorCode.h"
 #include "Image.h"
+#include "FanczosIpl.h"
 
 
 // 宏：AFFINE_SOFT_IPL

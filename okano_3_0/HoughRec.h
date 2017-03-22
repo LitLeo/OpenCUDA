@@ -25,6 +25,7 @@
 #include "HoughLine.h"
 #include "cuda_runtime.h"
 #include "ImageDrawer.h"
+#include "ImgConvert.h" 
 
 #include<string>
 using namespace std;

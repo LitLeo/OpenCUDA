@@ -28,6 +28,8 @@
 #include "Image.h"
 #include "DynamicArrays.h"
 #include "ErrorCode.h"
+#include "Template.h"
+#include "TemplateFactory.h"
 
 
 // 类：CurveTracing（曲线跟踪）

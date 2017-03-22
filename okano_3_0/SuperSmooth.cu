@@ -2,8 +2,7 @@
 // 对图像进行超平滑处理。
 
 #include "SuperSmooth.h"
-#include "Template.h"
-#include "TemplateFactory.h"
+
 
 #include <iostream>
 using namespace std;

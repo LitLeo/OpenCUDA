@@ -15,6 +15,9 @@
 #include "Image.h"
 #include "CoordiSet.h"
 #include "ErrorCode.h"
+#include "ImageDrawer.h"
+#include "ImgConvert.h" 
+
 #include<string>
 using namespace std;
 

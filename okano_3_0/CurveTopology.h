@@ -16,6 +16,7 @@
 
 #include "Curve.h"
 #include "ErrorCode.h"
+#include "Image.h"
 
 // 宏：CURVE_INCLUDE
 // 表示包含关系

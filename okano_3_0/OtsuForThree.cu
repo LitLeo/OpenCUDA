@@ -3,7 +3,7 @@
 // 图像的三值化结果。
 
 #include "OtsuForThree.h"
-#include "Histogram.h"
+
 
 #include <iostream>
 #include <fstream>

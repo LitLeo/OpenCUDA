@@ -22,6 +22,7 @@
 #include "ErrorCode.h"
 #include "FeatureVecCalc.h"
 #include "FeatureVecArray.h"
+#include "Matrix.h"
 
 #ifndef __SMOOTHVECTOR_H__
 #define __SMOOTHVECTOR_H__

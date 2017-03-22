@@ -2,7 +2,7 @@
 // 实现图像的多阈值N值化图像生成操作
 
 #include "Multidecrease.h"
-#include "Histogram.h"
+
 
 #include <iostream>
 #include <fstream>

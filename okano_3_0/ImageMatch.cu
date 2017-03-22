@@ -1,16 +1,7 @@
 // ImageMacth.cu
 // 实现对图像进行匹配的操作
-
-#include "ConnectRegion.h"
-#include "ErrorCode.h"
 #include "ImageMatch.h"
-#include "LabelIslandSortArea.h"
-#include "Normalization.h"
-#include "Rectangle.h"
-#include "RoiCopy.h"
-#include "SmallestDirRect.h"
-#include "Template.h"
-#include "TemplateFactory.h"
+
 
 // 宏：DEF_BLOCK_X 和 DEF_BLOCK_Y
 // 定义了默认的线程块尺寸

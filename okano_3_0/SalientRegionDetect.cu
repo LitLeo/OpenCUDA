@@ -2,9 +2,7 @@
 // 实现图像显著性区域检测
 
 #include "SalientRegionDetect.h"
-#include "Template.h"
-#include "ConnectRegion.h"
-#include "Histogram.h"
+
 
 #include <iostream>
 #include <stdio.h>

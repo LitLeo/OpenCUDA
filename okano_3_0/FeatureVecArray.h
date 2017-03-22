@@ -16,6 +16,8 @@
 #ifndef __FEATUREVECARRAY_H__
 #define __FEATUREVECARRAY_H__
 
+
+
 // 结构体：FeatureVecArray（特征向量组）
 // 该结构体定义了特征向量组的数据结构，组成这个向量组的每个向量都是五维的，
 // 这五维分别是 X 坐标、 Y 坐标， CV，SD，NC，此外还有向量组的大小 count

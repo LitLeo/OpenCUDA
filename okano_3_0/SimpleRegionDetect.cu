@@ -2,19 +2,6 @@
 // 实现图像的阈值分割
 
 #include "SimpleRegionDetect.h"
-#include "BilateralFilter.h"
-#include "BilinearInterpolation.h"
-#include "SmallestDirRect.h"
-#include "ConnectRegion.h"
-#include "FreckleFilter.h"
-#include "Morphology.h"
-#include "Image.h"
-#include "ImageDiff.h"
-#include "DownSampleImage.h"
-#include "LocalCluster.h"
-#include "TemplateFactory.h"
-#include "Histogram.h"
-#include "Threshold.h"
 
 #include <iostream>
 #include <stdio.h>

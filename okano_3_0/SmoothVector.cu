@@ -2,7 +2,7 @@
 // 实现特征向量平滑
 
 #include "SmoothVector.h"
-#include "Matrix.h"
+
 #include "ErrorCode.h" 
 
 

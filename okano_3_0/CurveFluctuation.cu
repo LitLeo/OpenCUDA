@@ -2,7 +2,6 @@
 // 创建人：邱孝兵
 
 #include "CurveFluctuation.h"
-#include "ErrorCode.h"
 #include <iostream>
 using namespace std;
 

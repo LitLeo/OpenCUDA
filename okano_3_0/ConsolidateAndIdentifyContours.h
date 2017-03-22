@@ -24,6 +24,9 @@
 #include "Thinning.h"
 #include "Binarize.h"
 
+#include "Template.h"
+#include "TemplateFactory.h"
+
 
 // 类：ConsolidateAndIdentifyContours
 // 继承自：无

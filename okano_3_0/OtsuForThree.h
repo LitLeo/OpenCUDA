@@ -17,6 +17,7 @@
 #define __OTSUFORTHREE_H__
 
 #include "Image.h"
+#include "Histogram.h"
 
 // 类：OtsuBinarize
 // 继承自：无

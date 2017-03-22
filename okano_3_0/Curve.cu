@@ -7,7 +7,6 @@
 #include <fstream>
 using namespace std;
 
-#include "ErrorCode.h"
 
 // 宏：SMCURVE_VALID 和 SMCURVE_NOT_VALID
 // 定义了 smCurveCordiXY 是否有效的范围值。

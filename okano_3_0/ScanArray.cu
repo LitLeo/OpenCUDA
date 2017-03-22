@@ -2,7 +2,7 @@
 // 找出图像中给定点集的包围矩形
 
 #include "ScanArray.h"
-#include "OperationFunctor.h"
+
 #include <iostream>
 #include <stdio.h>
 using namespace std;

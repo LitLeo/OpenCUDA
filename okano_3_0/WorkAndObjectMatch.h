@@ -27,6 +27,11 @@
 #include "ImageMatch.h"
 #include "RotateTable.h"
 
+
+#include "AffineTrans.h"
+#include "DownSampleImage.h"
+#include "RoiCopy.h"
+
 // 结构体：ImagesInfo（保存一组 TEMPLATE 的信息）
 // 用来保存一组在大小、方向上有差异的 TEMPLATE 的信息，包括这组 TEMPLATE 的图像
 // 数据、TEMPLATE 的数量，匹配使用的旋转表、匹配的摄动范围、匹配的摄动中心

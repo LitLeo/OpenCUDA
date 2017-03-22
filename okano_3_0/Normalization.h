@@ -21,6 +21,7 @@
 
 #include "ErrorCode.h"
 #include "Image.h"
+#include "Template.h"
 
 // 类：Normalization
 // 继承自：无

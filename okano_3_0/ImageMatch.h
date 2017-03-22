@@ -36,8 +36,16 @@
 #define __IMAGEMATCH_H__
 
 #include "Image.h"
-#include "Rectangle.h"
 #include "RotateTable.h"
+#include "ConnectRegion.h"
+#include "ErrorCode.h"
+#include "LabelIslandSortArea.h"
+#include "Normalization.h"
+#include "Rectangle.h"
+#include "RoiCopy.h"
+#include "SmallestDirRect.h"
+#include "Template.h"
+#include "TemplateFactory.h"
 
 // 结构体：MatchRes（匹配后得到的结果）
 // 该结构体定义了匹配后得到的结果，包括最佳匹配位置，最佳匹配对应的旋转角以及最

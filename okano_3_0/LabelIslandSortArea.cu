@@ -2,7 +2,7 @@
 // 实现区域排序算法
 
 #include "LabelIslandSortArea.h"
-#include "Histogram.h"
+
 
 #include <iostream>
 using namespace std;

@@ -8,7 +8,6 @@
 #include <cmath>
 using namespace std;
 
-#include "ErrorCode.h"
 
 // 宏：DEF_BLOCK_H
 // 定义了默认的一个线程块处理图像的行数。

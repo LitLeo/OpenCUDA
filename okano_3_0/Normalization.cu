@@ -2,7 +2,7 @@
 // 对图像进行正规化
 
 #include "Normalization.h"
-#include "Template.h"
+
 
 // 宏：用来定义使用 online 算法求平均值和方差
 //#define USE_ONLINE

@@ -1,8 +1,6 @@
 // HoughRec.cu
 // 实现 Hough 变换检测矩形
-#include "ImgConvert.h" 
 #include "HoughRec.h"
-#include "ImageDrawer.h"
 #include <iostream>
 #include <fstream>
 #include <cmath>

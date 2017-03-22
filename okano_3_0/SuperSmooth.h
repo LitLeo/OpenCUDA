@@ -31,6 +31,8 @@
 
 #include "ErrorCode.h"
 #include "Image.h"
+#include "Template.h"
+#include "TemplateFactory.h"
 
 // 按照河边老师的文档内容，该宏为 LocalCluster 在每一个方向上的搜索范围。
 #define MAX_SEARCHSCOPE  16

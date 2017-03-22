@@ -16,6 +16,9 @@
 
 #include "Image.h"
 #include "ErrorCode.h"
+#include "Template.h"
+#include "ConnectRegion.h"
+#include "Histogram.h"
 
 // 类：SalientRegionDetect
 // 继承自：无

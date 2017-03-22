@@ -54,6 +54,8 @@
 
 #include "Image.h"
 #include "ErrorCode.h"
+#include "Template.h"
+#include "TemplateFactory.h"
 
 // 宏：VAR_TH
 // 表示该滤波处理将用方差阈值法

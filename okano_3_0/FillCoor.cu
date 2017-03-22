@@ -1,6 +1,5 @@
 #include "FillCoor.h"
-#include "ImageDrawer.h"
-#include "ImgConvert.h" 
+
 #include <iostream>
 #include <stack>
 using namespace std;

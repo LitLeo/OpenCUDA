@@ -8,9 +8,6 @@
 #include <cmath>
 using namespace std;
 
-#include "ErrorCode.h"
-#include "Template.h"
-#include "TemplateFactory.h"
 
 // 宏：DEF_BLOCK_X 和 DEF_BLOCK_Y
 // 定义了默认的线程块的尺寸。

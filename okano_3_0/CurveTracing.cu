@@ -9,8 +9,6 @@
 
 using namespace std;
 
-#include "Template.h"
-#include "TemplateFactory.h"
 
 // 宏：CURVE_VALUE(曲线最大数目）
 // 设置图像能获得的曲线最大数目

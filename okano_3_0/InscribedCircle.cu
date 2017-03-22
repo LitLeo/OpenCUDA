@@ -10,9 +10,7 @@
 
 using namespace std;
 
-#include "Template.h"
-#include "TemplateFactory.h"
-#include "SortArray.h"
+
 
 // 宏：DEF_BLOCK_X 和 DEF_BLOCK_Y
 // 定义了默认的线程块尺寸。

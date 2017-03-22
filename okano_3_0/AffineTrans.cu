@@ -13,8 +13,6 @@ using namespace std;
 #include <nppcore.h>
 #include <nppi.h>
 
-#include "ErrorCode.h"
-#include "FanczosIpl.h"
 
 // 宏：M_PI
 // π值。对于某些操作系统，M_PI可能没有定义，这里补充定义 M_PI。

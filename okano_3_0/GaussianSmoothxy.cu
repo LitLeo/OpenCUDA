@@ -2,8 +2,7 @@
 // 实现对curve的高斯平滑
 
 #include "GaussianSmoothxy.h"
-#include "ErrorCode.h"
-#include "Curve.h"
+
 
 // 宏：DEF_BLOCK_X 和 DEF_BLOCK_Y
 // 定义了默认的线程块尺寸。

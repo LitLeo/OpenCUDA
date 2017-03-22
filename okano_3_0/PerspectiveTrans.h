@@ -22,6 +22,7 @@
 
 #include "ErrorCode.h"
 #include "Image.h"
+#include "FanczosIpl.h"
 
 // 宏：PERSPECT_SOFT_IPL
 // 用于设置 PerspectiveTrans 类中的 impType 成员变量，告知类的实例选用软件实现

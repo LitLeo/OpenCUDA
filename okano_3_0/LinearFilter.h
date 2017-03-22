@@ -23,7 +23,8 @@
 
 #include "Image.h"
 #include "Template.h"
-
+#include "ErrorCode.h"
+#include "ImageDiff.h"
 
 // 宏：LNFT_COUNT_DIV
 // 用于设置 LinearFilter 类中的 impType 成员变量，告知类的实例选用邻域像素总和

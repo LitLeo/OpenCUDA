@@ -23,7 +23,7 @@
 
 #include "Image.h"
 #include "ErrorCode.h"
-
+#include "Histogram.h"
 
 // 类：LabelIslandSortArea（区域排序类）
 // 继承自：无

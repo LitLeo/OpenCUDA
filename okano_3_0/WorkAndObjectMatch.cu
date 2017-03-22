@@ -3,10 +3,6 @@
 
 #include "WorkAndObjectMatch.h"
 
-#include "AffineTrans.h"
-#include "DownSampleImage.h"
-#include "RoiCopy.h"
-#include "RotateTable.h"
 
 // Host 全局常量：_scalModulus（扩缩系数）
 // 对 TEST 图像进行扩缩时使用的扩缩系数

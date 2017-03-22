@@ -2,7 +2,7 @@
 // 根据两个领域之间的分散程度,自动找到最佳二值化结果
 
 #include "OtsuBinarize.h"
-#include "Histogram.h"
+
 
 #include <iostream>
 #include <fstream>

@@ -32,6 +32,7 @@
 #define __BINARIZATION_H__
 
 #include "Image.h"
+#include "Binarize.h"
 
 // 类：Binarization
 // 继承自：无

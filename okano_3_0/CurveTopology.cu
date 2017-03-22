@@ -2,7 +2,7 @@
 // 曲线间的相位关系
 
 #include "CurveTopology.h"
-#include "Image.h"
+
 #include <stdio.h>
 #include <iostream>
 using namespace std;

@@ -2,7 +2,6 @@
 // 实现图像的多阈值二值化图像生成操作
 
 #include "Binarization.h"
-#include "Binarize.h"
 
 #include <stdio.h>
 #include <iostream>
@@ -10,7 +9,6 @@
 #include <cmath>
 using namespace std;
 
-#include "ErrorCode.h"
 
 // 宏：BINARIZE_PACK_LEVEL
 // 定义了一个线程中计算的像素点个数，若该值为4，则在一个线程中计算2 ^ 4 = 16

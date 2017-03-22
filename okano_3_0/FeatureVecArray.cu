@@ -2,7 +2,6 @@
 // 创建人：邱孝兵
 
 #include "FeatureVecArray.h"
-#include  "ErrorCode.h"
 
 
 // 宏 DELETE_FEATUREVECARRAY_HOST （删除 Host 端特征向量）

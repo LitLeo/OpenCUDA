@@ -2,8 +2,7 @@
 // 局部聚类
 
 #include "LocalCluster.h"
-#include "Image.h"
-#include "ErrorCode.h"
+
 
 #include <iostream>
 #include <cmath>

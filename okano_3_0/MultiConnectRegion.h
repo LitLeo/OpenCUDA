@@ -15,6 +15,8 @@
 
 #include "Image.h"
 #include "ErrorCode.h"
+#include "ImageFilter.h"
+#include "ConnectRegion.h"
 
 // 类：MultiConnectRegion
 // 继承自：无

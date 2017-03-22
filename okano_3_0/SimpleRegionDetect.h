@@ -50,6 +50,7 @@
 #include "Threshold.h"
 #include "ErrorCode.h"
 
+
 // 类：SimpleRegionDetect（简单的区域检测）
 // 继承自：无
 // 根据给出的区域大小以及指定的长短径要求，对输入图像进行一些预处理后
