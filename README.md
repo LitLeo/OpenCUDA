@@ -65,4 +65,4 @@ The Tesla K40 used for this research was donated by the NVIDIA Corporation.
 
 我的CSDN博客：http://blog.csdn.net/litdaguang
 
-  <center>![Figure 2: Illustration of the All-Reduce collective.](https://raw.githubusercontent.com/LitLeo/blog_pics/master/weixin.jpg)</center>
+![联系方式](https://raw.githubusercontent.com/LitLeo/blog_pics/master/weixin.jpg)
